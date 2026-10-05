@@ -127,3 +127,21 @@ The registration method uses the lower resolution Zarr levels and the Mattes mut
 #### Saving the transform
 
 - `w` - Write the current transform to the output file. This also prints a shareable neuroglancer URL that can be used to view the volumes with the transform applied.
+
+## Checking cross-scan placement of a segment
+
+`check_placement.py` checks whether one segment's surface volumes on two scans of the same scroll show the same
+papyrus. It resamples both to a shared (u, v, depth) grid in micrometres, using each OME-Zarr's scale, and reports
+for random windows the normalised cross-correlation (NCC) with no shift and at the best depth and in-plane shift.
+
+```bash
+S=https://vesuvius-challenge-open-data.s3.us-east-1.amazonaws.com/PHerc0139/segments/20250108000002-w027_2025010845/surface-volumes
+python check_placement.py \
+--reference $S/2.399um-0.22m-78keV-volume-20260102150214.zarr \
+--other $S/1.129um-0.22m-59keV-volume-20260413113053-L1.zarr
+```
+
+Each `--other` gets one line with the median NCC with no shift, at the best shift, the median in-plane shift and a
+verdict: `placed`, `same sheet, offset` (best NCC of 0.4 or more at a shift larger than one grid cell), or
+`no match within the search range` (for example the PHerc1667 1.129 um surface volumes, villa #1843).
+`--output report.json` keeps the per-window numbers. Tests: `python -m pytest test_check_placement.py`.
