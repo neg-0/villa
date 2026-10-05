@@ -20,5 +20,6 @@ Measured on PHerc1667 (2.4 um model adapted to the 1.129 um scan, 6 labelled seg
 - bfloat16 autocast (the default) trained every fold with no skipped steps; float16 diverged on 2 of 3 folds.
 - The adapted model drops on the original 2.399 um scan (0.92 to about 0.75), so keep one model per scan.
 
-The training step is the one used for those runs. Tests (CPU, a stand-in model):
+The training step is the one used for those runs. `--seed` sets the tile order; those runs used seed 0 + fold
+index, so `--seed 1` reproduces fold 1's tiles. Tests (CPU, a stand-in model):
 `python -m pytest test_finetune_on_scan.py`. Needs torch, numpy, scipy, pillow.
