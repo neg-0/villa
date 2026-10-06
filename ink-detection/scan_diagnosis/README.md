@@ -19,6 +19,12 @@ Writes `report/report.json`, `report/report.md` and one prediction PNG per offse
 order to fix them: a placement that matches nothing makes the depth and model results meaningless, and a canonical
 AUC below `--auc-ok` (default 0.75) on a well-placed segment points at adapting the model.
 
+Checked on real data (4 cases with known answers, all passed): on two PHerc0139 segments from #1912 it finds the
+inked layer 32 layers off the mesh (AUC 0.661 → 0.910 and 0.635 → 0.803); on a PHerc1667 1.129 µm segment it
+reports the canonical model at AUC 0.625 against 0.833 for the adapted one; and it flags the published PHerc1667
+1.129 µm surface volume as matching nothing on the 2.399 µm reference, listed first. Offsets whose 62-layer window
+does not fit the stack are skipped and reported.
+
 Inference goes through `optimized_inference` (`run_inference`, tile 256, stride 64), so it needs that folder's
 requirements and a GPU for full segments; use `--crop` to keep runs short. The tests need only numpy, scipy, pillow
 and zarr: `python -m pytest test_diagnose_segment.py`.

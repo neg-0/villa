@@ -82,3 +82,13 @@ def test_load_labels_reads_only_around_the_crop(tmp_path):
     assert L.shape == (96, 128) and origin == (16, 16)
     assert L[origin[0] + 20, origin[1] + 20] == 1.0 and L.sum() == lab.sum() / 255
     assert load_labels(None, (5, 5), (10, 10), 0) == (None, (5, 5))
+
+
+def test_offsets_that_do_not_fit_are_skipped_not_fatal():
+    lab = _labels()
+    rep = diagnose(np.zeros((96, 128, 63), np.uint8), _fake_predictor(lab, 0), [-8, 0, 8], labels=lab)
+    assert rep["offsets"] == [0] and rep["skipped_offsets"] == [-8, 8]
+    assert any("were skipped" in f for f in rep["findings"])
+    assert any(f.startswith("Depth: not tested") for f in rep["findings"])
+    with pytest.raises(ValueError):
+        diagnose(np.zeros((96, 128, 40), np.uint8), _fake_predictor(lab, 0), [0], labels=lab)

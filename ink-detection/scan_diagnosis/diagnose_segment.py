@@ -65,6 +65,11 @@ def window(n_layers, offset):
     return start, start + LAYERS
 
 
+def fits_window(n_layers, offset):
+    start = n_layers // 2 - LAYERS // 2 + offset
+    return start >= 0 and start + LAYERS <= n_layers
+
+
 def make_predictor(checkpoint, device="cuda", tile=256, stride=64, batch=4, work_dir="/tmp/diagnose_segment"):
     """predict(stack_hwc, start, end) -> (h, w) float32 probabilities, using optimized_inference's pipeline."""
     sys.path.insert(0, str(HERE.parent / "optimized_inference"))
@@ -99,11 +104,14 @@ def diagnose(stack, predict, offsets, labels=None, label_origin=(0, 0), label_se
              reference=None, surface_volume=None, adapted_predict=None, auc_ok=0.75, out_dir=None,
              placement_opts=None) -> dict:
     out = Path(out_dir) if out_dir else None
-    rep = {"offsets": list(offsets)}
+    fits = [o for o in offsets if fits_window(stack.shape[2], o)]
+    if not fits:
+        raise ValueError(f"no offset in {list(offsets)} fits a {LAYERS}-layer window in {stack.shape[2]} layers")
+    rep = {"offsets": fits, "skipped_offsets": [o for o in offsets if o not in fits], "layers": int(stack.shape[2])}
     if reference:
         rep["placement"] = {k: v for k, v in check_pair(reference, surface_volume, **(placement_opts or {})).items() if k != "windows"}
     maps = {}
-    for o in offsets:
+    for o in fits:
         maps[o] = predict(stack, *window(stack.shape[2], o))
         if out:
             Image.fromarray((np.clip(maps[o], 0, 1) * 255).astype(np.uint8)).save(out / f"pred_canonical_o{o:+d}.png")
@@ -142,7 +150,12 @@ def findings(rep, auc_ok=0.75) -> list:
             f.append(f"Placement: {v}.")
     d = rep["depth"]
     rows, pick = d["offsets"], d["label_free_pick"]
-    if "label_best" in d:
+    if rep.get("skipped_offsets"):
+        f.append(f"Depth: offsets {rep['skipped_offsets']} were skipped: a {LAYERS}-layer window there does not fit "
+                 f"the stack's {rep.get('layers')} layers. Render more layers to test them.")
+    if len(rows) < 2:
+        f.append(f"Depth: not tested (only offset {pick:+d} was scored).")
+    elif "label_best" in d:
         lb, a0 = d["label_best"], rows.get(0, {}).get("auc")
         gain = rows[lb]["auc"] - a0 if a0 is not None and np.isfinite(a0) else None
         if lb != 0 and gain is not None and gain >= 0.02:
