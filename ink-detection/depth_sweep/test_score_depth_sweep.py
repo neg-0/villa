@@ -2,7 +2,9 @@
 import numpy as np
 from PIL import Image
 
-from score_depth_sweep import main, score
+from scipy import ndimage
+
+from score_depth_sweep import align_labels, load_map, main, score
 
 
 def _maps(true_offset=-8, shape=(64, 96), seed=0):
@@ -45,3 +47,22 @@ def test_cli_reads_png(tmp_path, capsys):
     Image.fromarray((labels * 255).astype(np.uint8)).save(tmp_path / "labels.png")
     assert main(args + ["--labels", str(tmp_path / "labels.png")]) == 0
     assert "label-free pick: -8 | label best: -8" in capsys.readouterr().out
+
+
+def test_large_label_search_runs_coarse_to_fine():
+    rng = np.random.default_rng(1)
+    labels = (ndimage.gaussian_filter(rng.random((400, 500)), 6) > 0.52).astype(np.float32)
+    pred = np.clip(labels[150:310, 180:420] * 0.6 + 0.2 + 0.05 * rng.standard_normal((160, 240)), 0, 1)
+    L, at = align_labels(pred, labels, origin=(100, 100), search=120)
+    assert at == (150, 180) and L.shape == pred.shape
+
+
+def test_zarr_labels_window(tmp_path):
+    import zarr
+
+    lab = np.zeros((50, 60), np.uint8)
+    lab[10:20, 30:40] = 255
+    g = zarr.open_group(str(tmp_path / "inklabels.zarr"), mode="w")
+    g.create_dataset("0", data=lab, chunks=(16, 16))
+    a = load_map(tmp_path / "inklabels.zarr", window=(5, 25, 25, 45))
+    assert a.shape == (20, 20) and a.max() == 1.0 and a[5:15, 5:15].all() and a.sum() == 100

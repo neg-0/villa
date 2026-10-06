@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from diagnose_segment import diagnose, findings, load_stack, window, write_markdown
+from diagnose_segment import diagnose, findings, load_labels, load_stack, window, write_markdown
 from test_check_placement import _texture, _write_ome  # foundation/volume-registration, put on sys.path above
 
 
@@ -72,3 +72,13 @@ def test_findings_without_labels():
            "model": {"offset": 8}}
     f = findings(rep)
     assert len(f) == 1 and f[0].startswith("Depth: without labels, the most ink is predicted +8 layers")
+
+
+def test_load_labels_reads_only_around_the_crop(tmp_path):
+    lab = np.zeros((300, 400), np.uint8)
+    lab[120:140, 200:260] = 255
+    np.save(tmp_path / "lab.npy", lab)
+    L, origin = load_labels(tmp_path / "lab.npy", (100, 180), (64, 96), 16)
+    assert L.shape == (96, 128) and origin == (16, 16)
+    assert L[origin[0] + 20, origin[1] + 20] == 1.0 and L.sum() == lab.sum() / 255
+    assert load_labels(None, (5, 5), (10, 10), 0) == (None, (5, 5))

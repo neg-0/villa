@@ -17,4 +17,8 @@ reproduces the earlier analysis exactly. Mean AUC is 0.740 at offset 0 of the fl
 label-free pick and 0.841 at the label-best offset. The label-free pick is a diagnostic, not a fix: it loses
 0.044 on w041 and helps most where the mesh is clearly off (w044 0.658 → 0.886, w045 0.607 → 0.788).
 
+Labels can be png, tif, npy or zarr (level 0). A `--label-search` above 32 px runs coarse to fine: the best
+translation on 8x block-averaged maps, then a full-resolution search within 8 px of it (like the ds8 search of the
+#1912 benchmark); a 1200 x 3400 map with a 384 px search takes about 10 s.
+
 Needs numpy, scipy, pillow (tifffile for .tif maps). Tests: `python -m pytest test_score_depth_sweep.py`.

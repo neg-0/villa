@@ -25,9 +25,19 @@ from PIL import Image
 from scipy import ndimage
 
 
-def load_map(path) -> np.ndarray:
+def load_map(path, window=None) -> np.ndarray:
+    """A 2D map scaled to 0-1. window=(y0, x0, y1, x1) reads only that part (OME-Zarr / zarr labels: level 0)."""
     p = Path(path)
-    if p.suffix == ".npy":
+    is_zarr = str(path).rstrip("/").endswith(".zarr")
+    if is_zarr:
+        import zarr
+
+        g = zarr.open(str(path), mode="r")
+        a = g["0"] if hasattr(g, "keys") and "0" in g else g
+        if a.ndim == 3:  # (1, h, w) label volumes
+            a = a[0] if a.shape[0] == 1 else a[a.shape[0] // 2]
+        a = a[window[0]:window[2], window[1]:window[3]] if window else a[:]
+    elif p.suffix == ".npy":
         a = np.load(p)
     elif p.suffix in (".tif", ".tiff"):
         import tifffile
@@ -38,6 +48,8 @@ def load_map(path) -> np.ndarray:
     a = np.asarray(a, np.float32)
     if a.ndim == 3:
         a = a[..., 0]
+    if window and not is_zarr:
+        a = a[window[0]:window[2], window[1]:window[3]]
     return a / 255.0 if a.max() > 1.0 else a
 
 
@@ -52,13 +64,13 @@ def auc(score, pos, neg, max_samples=200000) -> float:
     return float((ranks[: sp.size].sum() - sp.size * (sp.size + 1) / 2) / (sp.size * sn.size))
 
 
-def align_labels(pred, labels, origin=(0, 0), search=0, step=2):
-    """The labels window under pred, at the translation within +-search of origin that correlates best."""
+def _best_shift(pred, labels, origin, search, step):
     h, w = pred.shape
     a = pred - pred.mean()
+    aa = (a * a).sum()
     best = (-2.0, origin[0], origin[1])
-    for dy in range(-search, search + 1, step if search else 1):
-        for dx in range(-search, search + 1, step if search else 1):
+    for dy in range(-search, search + 1, step):
+        for dx in range(-search, search + 1, step):
             y, x = origin[0] + dy, origin[1] + dx
             if y < 0 or x < 0 or y + h > labels.shape[0] or x + w > labels.shape[1]:
                 continue
@@ -66,10 +78,30 @@ def align_labels(pred, labels, origin=(0, 0), search=0, step=2):
             if L.std() == 0:
                 continue
             b = L - L.mean()
-            r = float((a * b).sum() / np.sqrt((a * a).sum() * (b * b).sum() + 1e-12))
+            r = float((a * b).sum() / np.sqrt(aa * (b * b).sum() + 1e-12))
             if r > best[0]:
                 best = (r, y, x)
-    _, y, x = best
+    return best
+
+
+def _block_mean(a, f):
+    h, w = a.shape[0] // f * f, a.shape[1] // f * f
+    return a[:h, :w].reshape(h // f, f, w // f, f).mean((1, 3))
+
+
+def align_labels(pred, labels, origin=(0, 0), search=0, step=2, coarse=8):
+    """The labels window under pred, at the translation within +-search of origin that correlates best.
+
+    Searches larger than 4 * coarse run on coarse-times downsampled maps first, then refine at full resolution
+    within +-coarse of the coarse best; smaller ones search every step pixels at full resolution.
+    """
+    h, w = pred.shape
+    if search > 4 * coarse and min(h, w) >= 4 * coarse:
+        _, y, x = _best_shift(_block_mean(pred, coarse), _block_mean(labels, coarse),
+                              (origin[0] // coarse, origin[1] // coarse), -(-search // coarse), 1)
+        _, y, x = _best_shift(pred, labels, (y * coarse, x * coarse), coarse, 1)
+    else:
+        _, y, x = _best_shift(pred, labels, origin, search, step if search else 1)
     return labels[y:y + h, x:x + w], (y, x)
 
 

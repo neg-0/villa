@@ -17,7 +17,8 @@ python diagnose_segment.py --surface-volume seg_newscan.zarr --checkpoint canoni
 
 --surface-volume is an 8-bit OME-Zarr surface volume (local path or URL; level 0 is used) or a (layers, height,
 width) .npy; the placement check needs OME-Zarr for both it and --reference. --crop y,x,h,w limits inference to a
-window of it in pixels. Labels are in the surface volume's pixels.
+window of it in pixels. Labels are in the surface volume's pixels; only the part around the crop is read, and a
+--label-search above 32 px runs coarse to fine (8x downsampled first), so a few hundred pixels takes seconds.
 Writes out_dir/report.json, out_dir/report.md and one prediction PNG per offset and model.
 """
 
@@ -83,6 +84,15 @@ def make_predictor(checkpoint, device="cuda", tile=256, stride=64, batch=4, work
         return np.where(cnt > 0, pred / np.maximum(cnt, 1e-6), 0).astype(np.float32)
 
     return predict
+
+
+def load_labels(path, origin, shape, search):
+    """Labels around the crop: only origin +- search plus the crop is read. Returns (labels, origin in them)."""
+    if not path:
+        return None, origin
+    y0, x0 = max(0, origin[0] - search), max(0, origin[1] - search)
+    labels = load_map(path, (y0, x0, origin[0] + shape[0] + search, origin[1] + shape[1] + search))
+    return labels, (origin[0] - y0, origin[1] - x0)
 
 
 def diagnose(stack, predict, offsets, labels=None, label_origin=(0, 0), label_search=0, neg_band_px=None,
@@ -177,7 +187,7 @@ def main(argv=None) -> int:
     ap.add_argument("--adapted-checkpoint", help="model adapted to this scan by scan_adapt/finetune_on_scan.py")
     ap.add_argument("--offsets", default="-16,-8,-4,0,4,8,16", help="window offsets in layers")
     ap.add_argument("--crop", help="y,x,h,w window of the surface volume in pixels")
-    ap.add_argument("--labels", help="ink labels (white = ink), in surface-volume pixels")
+    ap.add_argument("--labels", help="ink labels (white = ink; png, tif, npy or zarr, level 0), in surface-volume pixels")
     ap.add_argument("--label-origin", default="0,0", help="the crop's top-left corner in label pixels, as y,x")
     ap.add_argument("--label-search", type=int, default=0)
     ap.add_argument("--neg-band-px", type=float, help="score only non-ink pixels within this distance of ink")
@@ -192,8 +202,9 @@ def main(argv=None) -> int:
     stack = load_stack(a.surface_volume, crop)
     predict = make_predictor(a.checkpoint, a.device, work_dir=out / "partitions")
     adapted = make_predictor(a.adapted_checkpoint, a.device, work_dir=out / "partitions") if a.adapted_checkpoint else None
-    labels = load_map(a.labels) if a.labels else None
-    rep = diagnose(stack, predict, offsets, labels, tuple(int(v) for v in a.label_origin.split(",")), a.label_search,
+    labels, origin = load_labels(a.labels, tuple(int(v) for v in a.label_origin.split(",")), stack.shape[:2],
+                                 a.label_search)
+    rep = diagnose(stack, predict, offsets, labels, origin, a.label_search,
                    a.neg_band_px, a.reference, a.surface_volume, adapted, a.auc_ok, out)
     (out / "report.json").write_text(json.dumps(rep, indent=1))
     write_markdown(rep, out / "report.md")
