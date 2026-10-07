@@ -12,7 +12,7 @@ Runs the three checks for "why does ink fail on this segment of a new scan" (ope
 ```bash
 python diagnose_segment.py --surface-volume seg_newscan.zarr --checkpoint canonical.ckpt \
   --reference seg_refscan.zarr --crop 2000,3000,1024,1024 \
-  --labels inklabels.png --label-origin 2000,3000 --label-search 32 --out-dir report/
+  --labels inklabels.png --label-origin 2000,3000 --out-dir report/
 ```
 
 Writes `report/report.json`, `report/report.md` and one prediction PNG per offset. The findings are listed in the
@@ -28,3 +28,7 @@ does not fit the stack are skipped and reported.
 Inference goes through `optimized_inference` (`run_inference`, tile 256, stride 64), so it needs that folder's
 requirements and a GPU for full segments; use `--crop` to keep runs short. The tests need only numpy, scipy, pillow
 and zarr: `python -m pytest test_diagnose_segment.py`.
+
+`--label-search` (default 0) is for labels known to be misregistered. It finds one translation for the whole sweep;
+on registered labels leave it at 0, because a wide search can lock onto a repeat of the text lines (see
+`depth_sweep/README.md`).

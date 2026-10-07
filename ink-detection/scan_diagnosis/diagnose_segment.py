@@ -13,7 +13,7 @@ one report per segment:
 
 python diagnose_segment.py --surface-volume seg_newscan.zarr --checkpoint canonical.ckpt \
   --reference seg_refscan.zarr --crop 2000,3000,1024,1024 --labels inklabels.png --label-origin 2000,3000 \
-  --label-search 32 --out-dir report/
+  --out-dir report/
 
 --surface-volume is an 8-bit OME-Zarr surface volume (local path or URL; level 0 is used) or a (layers, height,
 width) .npy; the placement check needs OME-Zarr for both it and --reference. --crop y,x,h,w limits inference to a

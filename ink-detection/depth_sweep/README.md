@@ -20,5 +20,10 @@ label-free pick and 0.841 at the label-best offset. The label-free pick is a dia
 Labels can be png, tif, npy or zarr (level 0). A `--label-search` above 32 px runs coarse to fine: the best
 translation on 8x block-averaged maps, then a full-resolution search within 8 px of it (like the ds8 search of the
 #1912 benchmark); a 1200 x 3400 map with a 384 px search takes about 10 s.
+One translation is found for the whole sweep (on the mean of the maps) and every offset is scored at it;
+`auc_at_origin` is the unsearched AUC. Search only when the labels are known to be misregistered: on PHerc0841 and
+PHerc0139 (V-025b) a 384 px search locked onto shifts of 40 to 384 px whose AUC differed from the registered
+position by up to 0.3, in both directions, while the unsearched AUC matched an independent pipeline within 0.03 on
+18 of 18 windows.
 
 Needs numpy, scipy, pillow (tifffile for .tif maps). Tests: `python -m pytest test_score_depth_sweep.py`.
