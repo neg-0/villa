@@ -24,7 +24,9 @@ inked layer 32 layers off the mesh (AUC 0.40 → 0.87 and 0.50 → 0.73). On a h
 adapted model reads it at 0.82. It flags the published PHerc1667 1.129 µm surface volume as matching nothing on the
 2.399 µm reference, listed first. On PHerc0841, a scroll not used to build it (9 labelled windows, pass rule fixed
 in advance), its AUC matches an independent pipeline within 0.02 on every window, and it advises against adapting
-the model on 8 of 9, which agrees with a held-out fine-tune there. Offsets whose 62-layer window
+the model on 8 of 9, which agrees with a held-out fine-tune there. On three more scrolls (PHerc0009B, PHerc0500P2, PHerc0814; 12
+labelled windows) its AUC matches the organisers' published predictions of the same segments within 0.05 on every
+window (largest gap 0.033). Offsets whose 62-layer window
 does not fit the stack are skipped and reported.
 
 Inference goes through `optimized_inference` (`run_inference`, tile 256, stride 64), so it needs that folder's
