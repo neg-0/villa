@@ -35,7 +35,7 @@ for sub in ("foundation/volume-registration", "ink-detection/depth_sweep"):
     sys.path.insert(0, str(HERE.parent.parent / sub))
 
 from check_placement import check_pair  # noqa: E402
-from score_depth_sweep import load_map, score  # noqa: E402
+from score_depth_sweep import auc_at, load_map, score  # noqa: E402
 
 LAYERS = 62
 
@@ -125,9 +125,10 @@ def diagnose(stack, predict, offsets, labels=None, label_origin=(0, 0), label_se
         if out:
             Image.fromarray((np.clip(m, 0, 1) * 255).astype(np.uint8)).save(out / f"pred_adapted_o{best:+d}.png")
         rep["model"]["adapted_frac_above_0.5"] = float((m > 0.5).mean())
-        if labels is not None:
-            one = score({best: m}, labels, label_origin, label_search, neg_band_px)["offsets"][best]
-            rep["model"]["adapted_auc"] = one.get("auc")
+        if labels is not None:  # scored at the label translation the canonical sweep found, not a new fit
+            rep["model"]["adapted_auc"] = auc_at(m, labels, rep["depth"]["label_origin"], neg_band_px)
+            if label_search:
+                rep["model"]["adapted_auc_at_origin"] = auc_at(m, labels, label_origin, neg_band_px)
     rep["findings"] = findings(rep, auc_ok)
     return rep
 

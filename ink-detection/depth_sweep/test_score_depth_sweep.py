@@ -33,8 +33,22 @@ def test_label_search_recovers_the_map_position():
     big = np.zeros((100, 140), np.float32)
     big[20:84, 30:126] = labels
     res = score(maps, big, label_origin=(16, 26), label_search=8)
-    assert res["offsets"][-8]["label_origin"] == [20, 30]
+    assert res["label_origin"] == [20, 30]
     assert res["label_best"] == -8
+    assert res["offsets"][-8]["auc"] > res["offsets"][-8]["auc_at_origin"]
+
+
+def test_label_search_uses_one_translation_for_every_offset():
+    """A per-map search lets a map with no ink fit noise; one shared translation does not (V-025)."""
+    rng = np.random.default_rng(3)
+    labels = (ndimage.gaussian_filter(rng.random((200, 200)), 3) > 0.53).astype(np.float32)
+    ink = np.clip(0.3 + 0.5 * labels[50:130, 50:130] + 0.1 * rng.standard_normal((80, 80)), 0, 1)
+    noise = np.clip(ndimage.gaussian_filter(rng.random((80, 80)), 3) * 2 - 0.5, 0, 1)
+    res = score({0: ink, 32: noise}, labels, label_origin=(46, 46), label_search=16)
+    assert res["label_origin"] == [50, 50] and res["label_best"] == 0
+    assert abs(res["offsets"][32]["auc"] - 0.5) < 0.1
+    per_map = max(score({32: noise}, labels, label_origin=(46, 46), label_search=16)["offsets"][32]["auc"], 0.5)
+    assert per_map > res["offsets"][32]["auc"]
 
 
 def test_cli_reads_png(tmp_path, capsys):

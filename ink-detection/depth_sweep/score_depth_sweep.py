@@ -9,7 +9,7 @@ For every offset it reports the fraction of pixels above 0.5 and the mean probab
 label-free pick is the offset with the largest fraction above 0.5. With --labels it also reports the AUC per offset
 and the label-best offset. Labels may be larger than the maps: --label-origin gives the map's top-left corner in
 label pixels and --label-search searches a translation around it, keeping the one whose labels correlate best with
-the map.
+the mean of the maps; every offset is scored at that one translation.
 
 The label-free pick is a diagnostic, not a correction: on 8 labelled PHerc0139 segments (villa #1912) it raised mean
 AUC from 0.756 to 0.817 but lost more than 0.02 on two segments whose meshes were already aligned.
@@ -106,24 +106,42 @@ def align_labels(pred, labels, origin=(0, 0), search=0, step=2, coarse=8):
 
 
 def score(maps: dict, labels=None, label_origin=(0, 0), label_search=0, neg_band_px=None) -> dict:
+    """Per-offset stats, and with labels the AUC per offset.
+
+    With label_search, one translation is found for the whole sweep (on the mean of the maps) and every offset is
+    scored at it, so no offset gets its own fit. A label misregistration does not change with depth, and a separate
+    search per map let weak maps fit noise (V-025: 0.50 unsearched read as 0.60 to 0.87). auc_at_origin is the
+    unsearched AUC, for comparison with pipelines that do not search.
+    """
     offsets = sorted(maps)
     rows = {o: {"frac_above_0.5": float((maps[o] > 0.5).mean()), "mean_prob": float(maps[o].mean())} for o in offsets}
     res = {"offsets": rows, "label_free_pick": max(offsets, key=lambda o: rows[o]["frac_above_0.5"])}
     if labels is not None:
+        shape = maps[offsets[0]].shape
+        _, at = align_labels(np.mean([maps[o] for o in offsets], axis=0), labels, label_origin, label_search)
+        res["label_origin"] = [int(v) for v in at]
         for o in offsets:
-            L, at = align_labels(maps[o], labels, label_origin, label_search)
-            if L.shape != maps[o].shape:
-                rows[o]["auc"] = float("nan")
-                continue
-            neg = L < 0.05
-            if neg_band_px is not None:
-                neg &= ndimage.distance_transform_edt(L < 0.5) <= neg_band_px
-            rows[o]["auc"] = auc(maps[o], L >= 0.5, neg)
-            rows[o]["label_origin"] = [int(v) for v in at]
+            rows[o]["auc"] = auc_at(maps[o], labels, at, neg_band_px)
+            if label_search:
+                rows[o]["auc_at_origin"] = auc_at(maps[o], labels, label_origin, neg_band_px)
         scored = [o for o in offsets if np.isfinite(rows[o]["auc"])]
         if scored:
             res["label_best"] = max(scored, key=lambda o: rows[o]["auc"])
     return res
+
+
+def auc_at(pred, labels, at, neg_band_px=None) -> float:
+    """AUC of pred against the labels window whose top-left corner is at (y, x); nan if it runs off the labels."""
+    y, x = at
+    if y < 0 or x < 0:
+        return float("nan")
+    L = labels[y:y + pred.shape[0], x:x + pred.shape[1]]
+    if L.shape != pred.shape:
+        return float("nan")
+    neg = L < 0.05
+    if neg_band_px is not None:
+        neg &= ndimage.distance_transform_edt(L < 0.5) <= neg_band_px
+    return auc(pred, L >= 0.5, neg)
 
 
 def main(argv=None) -> int:
