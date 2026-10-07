@@ -19,10 +19,12 @@ Writes `report/report.json`, `report/report.md` and one prediction PNG per offse
 order to fix them: a placement that matches nothing makes the depth and model results meaningless, and a canonical
 AUC below `--auc-ok` (default 0.75) on a well-placed segment points at adapting the model.
 
-Checked on real data (4 cases with known answers, all passed): on two PHerc0139 segments from #1912 it finds the
-inked layer 32 layers off the mesh (AUC 0.661 → 0.910 and 0.635 → 0.803); on a PHerc1667 1.129 µm segment it
-reports the canonical model at AUC 0.625 against 0.833 for the adapted one; and it flags the published PHerc1667
-1.129 µm surface volume as matching nothing on the 2.399 µm reference, listed first. Offsets whose 62-layer window
+Checked on real data with registered labels and no label search. On two PHerc0139 segments from #1912 it finds the
+inked layer 32 layers off the mesh (AUC 0.40 → 0.87 and 0.50 → 0.73). On a held-out PHerc1667 1.129 µm segment the
+adapted model reads it at 0.82. It flags the published PHerc1667 1.129 µm surface volume as matching nothing on the
+2.399 µm reference, listed first. On PHerc0841, a scroll not used to build it (9 labelled windows, pass rule fixed
+in advance), its AUC matches an independent pipeline within 0.02 on every window, and it advises against adapting
+the model on 8 of 9, which agrees with a held-out fine-tune there. Offsets whose 62-layer window
 does not fit the stack are skipped and reported.
 
 Inference goes through `optimized_inference` (`run_inference`, tile 256, stride 64), so it needs that folder's
