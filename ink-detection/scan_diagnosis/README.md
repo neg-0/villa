@@ -26,7 +26,9 @@ adapted model reads it at 0.82. It flags the published PHerc1667 1.129 µm surfa
 in advance), its AUC matches an independent pipeline within 0.02 on every window, and it advises against adapting
 the model on 8 of 9, which agrees with a held-out fine-tune there. On three more scrolls (PHerc0009B, PHerc0500P2, PHerc0814; 12
 labelled windows) its AUC matches the organisers' published predictions of the same segments within 0.05 on every
-window (largest gap 0.033). Offsets whose 62-layer window
+window (largest gap 0.033). The `--auc-ok` gate matters: on PHerc0814's 1.129 µm scan the canonical model reads 11
+held-out windows at mean AUC 0.96 and the `scan_adapt` fine-tune lowers 10 of them (mean 0.82), as it does on
+PHerc0841; adapt only when the canonical AUC is low, as on PHerc1667 1.129 µm (0.56 → 0.86). Offsets whose 62-layer window
 does not fit the stack are skipped and reported.
 
 Inference goes through `optimized_inference` (`run_inference`, tile 256, stride 64), so it needs that folder's
